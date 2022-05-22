@@ -1,0 +1,81 @@
+---
+- name: Playbook for installing and configuring Postgresql database.
+  hosts: jawaker-system
+  become: true
+  gather_facts: no
+  tasks:
+    - name: Install prerequisite packages
+      apt:
+        name:
+          - wget
+          - python3-psycopg2
+          - acl
+        state: latest
+    - name: configure repository
+      shell: |
+        echo "deb http://apt.postgresql.org/pub/repos/apt $(lsb_release -cs)-pgdg main" > /etc/apt/sources.list.d/pgdg.list
+        wget --quiet -O - https://www.postgresql.org/media/keys/ACCC4CF8.asc | sudo apt-key add -
+      args:
+        warn: no
+    - name: install postgres package
+      apt:
+        name: postgresql
+        update_cache: yes
+        state: present
+      notify:
+        - Enable Postgresql Service
+        - Start Postgresql Service
+    - name: Create OS jawaker users
+      user: 
+        name: jawaker
+        state: present
+        shell: /bin/bash
+        password: "{{ '123' | password_hash('sha512') }}"
+        update_password: on_create
+      tags: create_user
+
+    - name: Create DB Super user.
+      become_user: postgres
+      postgresql_user:
+        name: jawaker
+        password: "123"
+        role_attr_flags: CREATEDB,SUPERUSER,CREATEROLE
+        encrypted: yes
+        state: present
+      tags: create_user
+
+    - name: build database
+      become_user: jawaker
+      postgresql_db:
+        name: jawaker
+        login_user: jawaker
+        owner: jawaker
+      tags: create_database
+
+    - name: build the table
+      become_user: jawaker
+      postgresql_table:
+        login_user: jawaker
+        db: jawaker
+        name: users
+        owner: jawaker
+        columns:
+        - id bigserial primary key
+        - username text
+      tags: create_database
+
+  handlers:
+    - name: Restart Postgresql Service
+      systemd:
+        name: postgresql
+        state: restarted
+
+    - name: Start Postgresql Service
+      systemd:
+        name: postgresql
+        state: started
+
+    - name: Enable Postgresql Service
+      systemd:
+        name: postgresql
+        enabled: yes

@@ -1,0 +1,53 @@
+---
+- name: Create a service to dump data from Redis to Postgresql
+  hosts: jawaker-system
+  become: yes
+  gather_facts: no
+  tasks:
+    - name: Install required packages
+      apt:
+        name:
+          - libpq-dev
+          - python-dev
+          - python3-dev
+          - python3-pip
+          - python3-redis
+
+    - name: copy python script and shell scripts to the managed host
+      copy:
+        src: "{{ item }}"
+        dest: /root
+        owner: root
+        group: root
+        mode: '0744'
+      with_items:
+        - rtpg-service.py
+        - enqueue_redis.sh
+        - watch.sh
+
+
+    - name: Create systemd service file
+      template:
+        src: rtpg.service.j2
+        dest: /lib/systemd/system/rtpg.service
+      vars:
+        - service_description: "A python service to dump data from Redis to Postgresql"
+        - user: root
+      notify:
+        - daemon reload
+        - service start
+        - service enable
+  handlers:
+    - name: daemon reload
+      systemd:
+        daemon_reload: yes
+
+    - name: Start rtpg Service
+      systemd:
+        name: rtpg.service
+        state: started
+
+    - name: Enable rtpg Service
+      systemd:
+        name: rtpg.service
+        enabled: yes

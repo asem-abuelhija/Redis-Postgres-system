@@ -1,0 +1,44 @@
+---
+- name: Playbook for installing and configuring Redis.
+  hosts: jawaker-system
+  remote_user: root
+  become: true
+  gather_facts: no
+  tasks:
+    - name: Configure Redis external repository.
+      shell: |
+        curl https://packages.redis.io/gpg | sudo apt-key add -
+        echo "deb https://packages.redis.io/deb $(lsb_release -cs) main" | sudo tee /etc/apt/sources.list.d/redis.list
+      args:
+        warn: no
+
+    - name: Install redis
+      apt:
+        name: redis-server
+        update_cache: yes
+        force_apt_get: yes
+      notify:
+        - Enable Redis
+        - Start Redis
+    - name: Set redis server pid file
+      lineinfile:
+        path: /etc/redis/redis.conf
+        regexp: "^pidfile"
+        line: "pidfile /var/run/redis/redis-server.pid"
+      notify:
+        - Restart Redis
+  handlers:
+  - name: Restart Redis
+    systemd:
+      name: redis-server
+      state: restarted
+
+  - name: Start Redis
+    systemd:
+      name: redis-server
+      state: started
+
+  - name: Enable Redis
+    systemd:
+      name: redis-server
+      enabled: yes
